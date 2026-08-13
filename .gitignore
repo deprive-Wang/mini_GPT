@@ -1,0 +1,40 @@
+# 数据、权重、实验产物（体积大，不入库）
+data/
+checkpoints/
+experiments/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.env
+.env.*
+
+# 模型权重 / 本地缓存
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+.cache/
+huggingface/
+hf_cache/
+
+# 日志与实验跟踪
+*.log
+wandb/
+runs/
+.ipynb_checkpoints/
+
+# 本地 IDE（解释器路径、conda 管理器等本机配置）
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
