@@ -18,14 +18,18 @@
 - [x] 确认独立 conda 环境名：`Mini_GPT`（用户已开始创建）
 - [x] 确认 Python 3.11 只是稳妥选择，不是 nanoGPT 官方硬性要求
 - [x] 建立项目目录 `D:\holiday_learning\mini_GPT`
-- [ ] 完成 `conda create -n Mini_GPT python=3.11 -y`，并确认解释器路径含 `envs\Mini_GPT`
-- [ ] 在 `Mini_GPT` 环境安装 `tiktoken`
-- [ ] tokenizer 冒烟：`Once upon a time` 编码/解码，`vocab_size == 50257`
+- [x] 完成 `conda create -n Mini_GPT python=3.11 -y`，并确认解释器路径含 `envs\Mini_GPT`
+- [x] 在 `Mini_GPT` 环境安装 `tiktoken`
+- [x] tokenizer 冒烟：`Once upon a time` 编码/解码，`vocab_size == 50257`
 - [x] 补充 `.gitignore`，忽略 `data/`、权重、缓存
 - [x] 补充 `requirements.txt`（第一阶段仅 `tiktoken`）
-- [ ] 下载 TinyStories（须先确认路径；默认本仓库 `data/`）
-- [ ] 用 GPT-2 BPE 编码并打包训练 token 序列
-- [ ] 验证 `[B, T] -> logits [B, T, 50257]`，以及 next-token label 错位一格
+- [x] 安装 `datasets`（顺带引入 `numpy`、`pandas`、`pyarrow`）
+- [x] 写 `scripts/prepare_data.py`（相对路径，从仓库根目录运行；已过 `py_compile`）
+- [x] 下载 TinyStories（原始 parquet 落在 `HF_HOME=D:\AI_model\huggingface`，arrow 缓存在 `data/hf_cache`）
+- [x] 全量编码：`data/train.bin` 224,512,862 tokens / 100 万篇；`data/val.bin` 4,765,918 tokens / 21,990 篇
+- [x] 安装 CUDA 版 PyTorch 2.11.0+cu128；本机 RTX 3070 Laptop 8GB，`torch.cuda.is_available()` 为 True
+- [x] 写 `dataset.py`，自检通过：`[16, 512]` int64，`y[:, :-1] == x[:, 1:]`，token id 不越界
+- [ ] 验证 `[B, T] -> logits [B, T, 50257]`
 - [ ] 实现 6 层 Decoder-only 骨架并完成单 batch 前向
 - [ ] 训练 / validation / checkpoint / 采样闭环
 
@@ -33,12 +37,14 @@
 
 ```text
 mini_GPT/
-  .vscode/settings.json   本机 IDE 配置，已 gitignore；conda 管理器已选，尚未绑定 Mini_GPT 解释器
-  data/                   空目录，尚未下载数据
-  main.py                 空文件
-  AGENTS.md               本文件
-  .gitignore              已忽略 data/、checkpoints/、experiments/、.vscode/、权重和缓存
-  requirements.txt        第一阶段仅 tiktoken
+  .vscode/settings.json     本机 IDE 配置，已 gitignore
+  data/                     已 gitignore；train.bin 449MB、val.bin 9.5MB、hf_cache 1.8GB
+  scripts/prepare_data.py   下载并编码 TinyStories，从仓库根目录运行
+  dataset.py                memmap 采样 [16, 512]，含错位自检
+  main.py                   空文件
+  AGENTS.md                 本文件
+  .gitignore                已忽略 data/、checkpoints/、experiments/、.vscode/、权重和缓存
+  requirements.txt          tiktoken / datasets / numpy / torch
 ```
 
 ## 固定要求
