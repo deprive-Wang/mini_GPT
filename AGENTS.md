@@ -31,7 +31,9 @@
 - [x] 写 `dataset.py`，自检通过：`[16, 512]` int64，`y[:, :-1] == x[:, 1:]`，token id 不越界
 - [x] 写 `model.py`：6 层 Pre-LN Decoder-only，可学习位置编码，手写因果 mask，token/lm_head 权重共享
 - [x] 单 batch 前向自检通过：`[16, 512] -> [16, 512, 50257]`，cuda，loss=10.91（接近 ln(50257)≈10.82），参数量 44.9M
-- [ ] 训练 / validation / checkpoint / 采样闭环
+- [x] 写 `train.py`：AdamW、weight_decay 0.1、warmup + cosine、FP16、梯度累积 4、latest/best checkpoint
+- [x] 本机小步数验证：micro batch 16 反向 OOM；`--batch-size 4` 下 20 步 loss 10.95→9.81，val ppl 可算；`--resume` 从 latest 恢复后再跑 2 步
+- [ ] 采样闭环（`sample.py`：greedy / temperature / top-k）
 
 当前目录现状：
 
@@ -42,6 +44,7 @@ mini_GPT/
   scripts/prepare_data.py   下载并编码 TinyStories，从仓库根目录运行
   dataset.py                memmap 采样 [16, 512]，含错位自检
   model.py                  6 层 Pre-LN Decoder-only；python model.py 自检通过
+  train.py                  AdamW + warmup/cosine + FP16 + 梯度累积 + checkpoint
   main.py                   空文件
   AGENTS.md                 本文件
   .gitignore                已忽略 data/、checkpoints/、experiments/、.vscode/、权重和缓存
@@ -94,7 +97,7 @@ checkpoint    每 1,000 steps 存 latest；validation 最优另存 best
 记录          loss、perplexity、learning rate、tokens/sec、峰值显存
 ```
 
-训练默认按 AutoDL 单卡 RTX 3090 24GB 设计。本机 RTX 3070 Laptop 8GB 已能跑通 `[16, 512]` eval 前向；完整训练仍按 3090。
+训练默认按 AutoDL 单卡 RTX 3090 24GB、micro batch 16 设计。本机 RTX 3070 Laptop 8GB 能跑 `[16, 512]` eval 前向，但 FP16 反向会 OOM；本机验证用 `--batch-size 4`。
 
 ### 验收标准
 
@@ -105,25 +108,15 @@ checkpoint    每 1,000 steps 存 latest；validation 最优另存 best
 5. 至少 10 组固定 prompt 的生成样例，比较采样参数差异
 6. 完成模型、数据、参数、曲线、显存、生成结果和失败样例的实验记录
 
-## 当前步骤（训练闭环）
+## 当前步骤（采样）
 
-模型骨架已通过 `python model.py` 自检。这一步只写训练，不提前写采样。
+训练闭环已通过本机小步数验证。这一步写 `sample.py`，不提前上 RoPE / RMSNorm / SwiGLU / KV Cache。
 
-### 1. 写 `train.py`
-
-按第一版规格：AdamW、weight_decay 0.1、峰值学习率 3e-4、linear warmup + cosine decay、FP16、micro batch 16、梯度累积 4。超参数复用 `model.GPTConfig`，不要另写一套。
-
-### 2. 先跑很小步数
-
-确认 training loss 下降、validation perplexity 可算。本机 8GB 若 FP16 仍 OOM，先缩小 micro batch 验证链路，完整训练仍按 3090 设计。
-
-### 3. checkpoint
-
-每 1,000 steps 存 `checkpoints/latest.pt`（模型、优化器、step）；validation 最优另存 `best.pt`，且能从 latest 恢复。
+当前 `checkpoints/` 里是 22 步冒烟权重，生成质量会很差；`sample.py` 先把 greedy / temperature / top-k 三条路径跑通。正式 10,000 / 30,000 steps 仍按 AutoDL RTX 3090、默认 micro batch 16。
 
 ### 当前不要做
 
-- 不要写 `sample.py`、不要上 RoPE / RMSNorm / SwiGLU / KV Cache
+- 不要上 RoPE / RMSNorm / SwiGLU / KV Cache
 - 不要把依赖装进 `base`、`ML` 或 AutoDL `transformer`
 - 不要用 Codex 内置 Python
 
@@ -140,7 +133,7 @@ mini_GPT/
   config.py                 待建；第一版超参数目前写在 model.GPTConfig
   model.py                  已建，Decoder-only；python model.py 自检通过
   dataset.py                已建，memmap 采样 [16, 512]
-  train.py                  待建
+  train.py                  已建；本机验证用 --batch-size 4，默认仍是 16
   sample.py                 待建
   scripts/prepare_data.py   已建，下载并编码 TinyStories
   data/                     gitignore；原始文本与 token 序列
@@ -177,15 +170,15 @@ nanoGPT 文档中的安装示例一次装齐；本项目已按步骤补到 `tikt
 
 ## 当前风险或缺口
 
-- 完整训练按 AutoDL 单卡 RTX 3090 24GB 设计；本机 RTX 3070 Laptop 8GB 已能跑通 `[16, 512]` eval 前向，训练时 FP16 + 梯度累积仍可能吃紧
-- 第一版超参数目前写在 `model.GPTConfig`，尚未拆到独立 `config.py`
+- 完整训练按 AutoDL 单卡 RTX 3090 24GB、默认 micro batch 16 设计。本机 RTX 3070 Laptop 8GB 能跑 `[16, 512]` eval 前向，但 FP16 反向会 OOM；本机验证链路用 `--batch-size 4`
+- 当前 `checkpoints/` 是 22 步冒烟权重，只能用来测恢复和采样接口，不能当生成质量基线
+- 第一版超参数目前写在 `model.GPTConfig`，训练超参写在 `train.py`，尚未拆到独立 `config.py`
 - 旧 AutoDL `transformer` 环境出现过「conda 已列出包但 Python 导不进」；Mini-GPT 用 GPT-2 BPE，不依赖 SentencePiece，但装新依赖时仍要核对 `sys.executable`
 
 ## 下一步
 
-模型骨架已通过单 batch 前向。下一件事先不要搭采样：
+训练闭环已通过本机小步数验证。下一件事先不要上第二版结构：
 
-1. 写 `train.py`：AdamW、warmup + cosine、FP16、micro batch 16、梯度累积 4
-2. 先跑通很小步数，确认 loss 能下降、validation perplexity 可算
-3. checkpoint：每 1,000 steps 存 latest，validation 最优另存 best，并能从 latest 恢复 step / 优化器
-4. 再写 `sample.py`：greedy / temperature / top-k
+1. 写 `sample.py`：greedy / temperature / top-k
+2. 用当前 checkpoint 把三条采样路径跑通（生成质量会很差，这是预期）
+3. 正式 10,000 / 30,000 steps 仍放到 AutoDL RTX 3090，默认 micro batch 16
