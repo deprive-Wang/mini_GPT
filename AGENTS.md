@@ -12,7 +12,7 @@
 
 ## 当前进度
 
-记录日期：2026-08-13
+记录日期：2026-08-14
 
 - [x] 确认项目定位：从零预训练 Mini-GPT，不重训 tokenizer
 - [x] 确认独立 conda 环境名：`Mini_GPT`（用户已开始创建）
@@ -29,8 +29,8 @@
 - [x] 全量编码：`data/train.bin` 224,512,862 tokens / 100 万篇；`data/val.bin` 4,765,918 tokens / 21,990 篇
 - [x] 安装 CUDA 版 PyTorch 2.11.0+cu128；本机 RTX 3070 Laptop 8GB，`torch.cuda.is_available()` 为 True
 - [x] 写 `dataset.py`，自检通过：`[16, 512]` int64，`y[:, :-1] == x[:, 1:]`，token id 不越界
-- [ ] 验证 `[B, T] -> logits [B, T, 50257]`
-- [ ] 实现 6 层 Decoder-only 骨架并完成单 batch 前向
+- [x] 写 `model.py`：6 层 Pre-LN Decoder-only，可学习位置编码，手写因果 mask，token/lm_head 权重共享
+- [x] 单 batch 前向自检通过：`[16, 512] -> [16, 512, 50257]`，cuda，loss=10.91（接近 ln(50257)≈10.82），参数量 44.9M
 - [ ] 训练 / validation / checkpoint / 采样闭环
 
 当前目录现状：
@@ -41,6 +41,7 @@ mini_GPT/
   data/                     已 gitignore；train.bin 449MB、val.bin 9.5MB、hf_cache 1.8GB
   scripts/prepare_data.py   下载并编码 TinyStories，从仓库根目录运行
   dataset.py                memmap 采样 [16, 512]，含错位自检
+  model.py                  6 层 Pre-LN Decoder-only；python model.py 自检通过
   main.py                   空文件
   AGENTS.md                 本文件
   .gitignore                已忽略 data/、checkpoints/、experiments/、.vscode/、权重和缓存
@@ -93,7 +94,7 @@ checkpoint    每 1,000 steps 存 latest；validation 最优另存 best
 记录          loss、perplexity、learning rate、tokens/sec、峰值显存
 ```
 
-训练默认按 AutoDL 单卡 RTX 3090 24GB 设计。本地先做 tokenizer、数据编码和 CPU/小 batch 形状验证。
+训练默认按 AutoDL 单卡 RTX 3090 24GB 设计。本机 RTX 3070 Laptop 8GB 已能跑通 `[16, 512]` eval 前向；完整训练仍按 3090。
 
 ### 验收标准
 
@@ -104,64 +105,27 @@ checkpoint    每 1,000 steps 存 latest；validation 最优另存 best
 5. 至少 10 组固定 prompt 的生成样例，比较采样参数差异
 6. 完成模型、数据、参数、曲线、显存、生成结果和失败样例的实验记录
 
-## 当前步骤（做到 tokenizer 冒烟为止）
+## 当前步骤（训练闭环）
 
-今天只做分词器，先不下载 TinyStories。
+模型骨架已通过 `python model.py` 自检。这一步只写训练，不提前写采样。
 
-### 1. 建环境
+### 1. 写 `train.py`
 
-用户已执行过 `conda create -n Mini_GPT`（未指定 Python）。不要再建成第二个空环境。
+按第一版规格：AdamW、weight_decay 0.1、峰值学习率 3e-4、linear warmup + cosine decay、FP16、micro batch 16、梯度累积 4。超参数复用 `model.GPTConfig`，不要另写一套。
 
-若创建尚未完成或环境是空的，用：
+### 2. 先跑很小步数
 
-```powershell
-conda create -n Mini_GPT python=3.11 -y
-conda activate Mini_GPT
-python -c "import sys; print(sys.executable); print(sys.version)"
-```
+确认 training loss 下降、validation perplexity 可算。本机 8GB 若 FP16 仍 OOM，先缩小 micro batch 验证链路，完整训练仍按 3090 设计。
 
-若环境已存在但没有 Python：
+### 3. checkpoint
 
-```powershell
-conda activate Mini_GPT
-conda install python=3.11 -y
-python -c "import sys; print(sys.executable); print(sys.version)"
-```
-
-通过标准：路径必须含 `envs\Mini_GPT`，版本为 3.11.x。
-
-说明：nanoGPT README 没有规定 Python 版本；3.11 是本机稳妥选择，不是官方硬性要求。
-
-### 2. 只装分词器
-
-```powershell
-pip install tiktoken
-```
-
-第一次调用 GPT-2 编码时，`tiktoken` 会拉取很小的编码表。这不是模型权重，也不是 TinyStories。
-
-### 3. 冒烟验证
-
-```powershell
-python -c "import tiktoken; enc = tiktoken.get_encoding('gpt2'); ids = enc.encode('Once upon a time'); print('vocab_size:', enc.n_vocab); print('ids:', ids); print('decoded:', enc.decode(ids))"
-```
-
-通过标准：
-
-```text
-vocab_size: 50257
-ids: 一串整数
-decoded: Once upon a time
-```
-
-`vocab_size` 必须正好是 50257。对不上先停。
+每 1,000 steps 存 `checkpoints/latest.pt`（模型、优化器、step）；validation 最优另存 `best.pt`，且能从 latest 恢复。
 
 ### 当前不要做
 
-- 不要装 `torch`、`transformers`、`datasets`
-- 不要下载 TinyStories
-- 不要训练自己的 tokenizer
+- 不要写 `sample.py`、不要上 RoPE / RMSNorm / SwiGLU / KV Cache
 - 不要把依赖装进 `base`、`ML` 或 AutoDL `transformer`
+- 不要用 Codex 内置 Python
 
 ## 建议目录
 
@@ -171,14 +135,14 @@ decoded: Once upon a time
 mini_GPT/
   AGENTS.md
   .gitignore
-  requirements.txt          第一阶段仅 tiktoken
-  main.py
-  config.py                 待建，集中超参数和路径
-  model.py                  待建，Decoder-only
-  dataset.py                待建
+  requirements.txt          tiktoken / datasets / numpy / torch
+  main.py                   空文件
+  config.py                 待建；第一版超参数目前写在 model.GPTConfig
+  model.py                  已建，Decoder-only；python model.py 自检通过
+  dataset.py                已建，memmap 采样 [16, 512]
   train.py                  待建
   sample.py                 待建
-  scripts/prepare_data.py   待建，下载并编码 TinyStories
+  scripts/prepare_data.py   已建，下载并编码 TinyStories
   data/                     gitignore；原始文本与 token 序列
   checkpoints/              gitignore；latest.pt / best.pt
   experiments/              gitignore；曲线、生成样例、日志
@@ -192,19 +156,13 @@ mini_GPT/
 | 项 | 当前约定 |
 |---|---|
 | conda 环境 | `Mini_GPT` |
-| 建议解释器 | `D:\Anaconda\envs\Mini_GPT\python.exe`（创建完成后核对） |
-| 第一阶段依赖 | 仅 `tiktoken` |
-| 后续依赖 | `torch`、`numpy`、`datasets`；需要 GPT-2 权重对照时再装 `transformers` |
+| 建议解释器 | `D:\Anaconda\envs\Mini_GPT\python.exe` |
+| 当前依赖 | `tiktoken`、`datasets`、`numpy`、`torch`（2.11.0+cu128） |
+| 尚未安装 | 需要 GPT-2 权重对照时再装 `transformers`；训练日志需要时再装 `wandb` / `tqdm` |
 | 参考实现 | [karpathy/nanoGPT](https://github.com/karpathy/nanoGPT)，对照工程，不直接照抄 |
 | 论文 | GPT-2 技术报告；TinyStories [arXiv:2305.07759](https://arxiv.org/abs/2305.07759) |
 
-nanoGPT 文档中的安装示例是：
-
-```text
-pip install torch numpy transformers datasets tiktoken wandb tqdm
-```
-
-本项目第一阶段只装 `tiktoken`，其余按步骤补，避免一次装齐后环境失控。
+nanoGPT 文档中的安装示例一次装齐；本项目已按步骤补到 `tiktoken` / `datasets` / `numpy` / `torch`。`transformers`、`wandb`、`tqdm` 仍按需再装。
 
 本仓库任务不要用 Codex 内置 Python（`C:\Users\14000\.cache\codex-runtimes\...`），也不要往 Anaconda `base` 装包。
 
@@ -219,18 +177,15 @@ pip install torch numpy transformers datasets tiktoken wandb tqdm
 
 ## 当前风险或缺口
 
-- `conda create -n Mini_GPT` 可能建成空环境；必须确认 `python` 指向 `envs\Mini_GPT`
-- `.vscode/settings.json` 已 gitignore；conda 管理器已选，尚未绑定 `Mini_GPT` 解释器
-- TinyStories 体积较大，下载前要确认落在 `mini_GPT/data/`（`.gitignore` 已忽略该目录）
-- 完整训练按 3090 设计；本机只做 tokenizer、数据编码和形状验证
+- 完整训练按 AutoDL 单卡 RTX 3090 24GB 设计；本机 RTX 3070 Laptop 8GB 已能跑通 `[16, 512]` eval 前向，训练时 FP16 + 梯度累积仍可能吃紧
+- 第一版超参数目前写在 `model.GPTConfig`，尚未拆到独立 `config.py`
 - 旧 AutoDL `transformer` 环境出现过「conda 已列出包但 Python 导不进」；Mini-GPT 用 GPT-2 BPE，不依赖 SentencePiece，但装新依赖时仍要核对 `sys.executable`
 
 ## 下一步
 
-tokenizer 冒烟通过后，按这个顺序：
+模型骨架已通过单 batch 前向。下一件事先不要搭采样：
 
-1. 把 VS Code / Cursor 解释器指到 `Mini_GPT`
-2. 确认 TinyStories 下载路径后，写 `scripts/prepare_data.py`
-3. 编码前 100 万篇 train + 官方 validation，检查样本数、token 总量、长度分布
-4. 写 Dataset，验证 `[B, 512]` 和 next-token label 错位
-5. 搭模型骨架，跑通单 batch 前向：`[B, T, 50257]`
+1. 写 `train.py`：AdamW、warmup + cosine、FP16、micro batch 16、梯度累积 4
+2. 先跑通很小步数，确认 loss 能下降、validation perplexity 可算
+3. checkpoint：每 1,000 steps 存 latest，validation 最优另存 best，并能从 latest 恢复 step / 优化器
+4. 再写 `sample.py`：greedy / temperature / top-k
