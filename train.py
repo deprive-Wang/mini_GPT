@@ -19,6 +19,10 @@
     python train.py --max-steps 30000
     python train.py --resume
 
+TensorBoard 事件文件写到 experiments/tb（与 train.log 并列，已 gitignore）。
+查看曲线（仓库根目录，解释器必须是 Mini_GPT 环境）：
+    python -m tensorboard --logdir experiments/tb
+
 本机 RTX 3070 Laptop 8GB 上 micro batch 16 的反向会 OOM，验证链路用 --batch-size 4。
 完整训练仍按 3090 的默认 micro batch 16。
 """
@@ -34,6 +38,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 from torch.amp import GradScaler, autocast
+from torch.utils.tensorboard import SummaryWriter
 
 from dataset import BATCH_SIZE, BLOCK_SIZE, get_batch, load_tokens
 from model import GPTConfig, MiniGPT
@@ -53,6 +58,7 @@ LOG_INTERVAL = 10
 
 CKPT_DIR = Path("checkpoints")
 LOG_DIR = Path("experiments")
+TB_DIR = LOG_DIR / "tb"   # TensorBoard 事件文件；与 train.log 并列，已 gitignore
 
 
 @dataclass
@@ -106,7 +112,7 @@ def configure_optimizer(
 
 def get_lr(step: int, warmup_steps: int, max_steps: int) -> float:
     """linear warmup 到 PEAK_LR，再 cosine 降到 MIN_LR。
-
+    余弦退火策略--针对学习率衰减的一种策略，学习率先增大后减小。
     step 从 0 起。warmup 阶段用 (step + 1) / warmup_steps，避免第 0 步学习率为 0
     时第一次更新完全空转。
     """
@@ -182,6 +188,14 @@ def load_checkpoint(
     return TrainState(step=int(ckpt["step"]), best_val_loss=float(ckpt["best_val_loss"]))
 
 
+def format_metrics_header() -> str:
+    """与 format_metrics 列宽对齐的表头。"""
+    return (
+        f"| {'step':^13} | {'loss':^7} | {'ppl':^8} | {'lr':^8} | "
+        f"{'tok/s':^6} | {'peak_mem':^8} |"
+    )
+
+
 def format_metrics(
     step: int,
     max_steps: int,
@@ -192,9 +206,16 @@ def format_metrics(
 ) -> str:
     ppl = math.exp(min(loss, 20.0))  # 截断避免未训练时 exp 溢出打印
     return (
-        f"step {step:6d}/{max_steps}  loss {loss:.4f}  ppl {ppl:.1f}  "
-        f"lr {lr:.2e}  {tokens_per_sec:.0f} tok/s  peak_mem {peak_mem_mb:.0f}MB"
+        f"| {f'{step}/{max_steps}':>13} | {loss:7.4f} | {ppl:8.1f} | {lr:8.2e} | "
+        f"{tokens_per_sec:6.0f} | {f'{peak_mem_mb:.0f}MB':>8} |"
     )
+
+
+def write_tb_scalars(writer: SummaryWriter, step: int, scalars: dict[str, float]) -> None:
+    """同一 step 的标量写进 TensorBoard。名字用 train/ 与 eval/ 分组，便于对比曲线。"""
+    for name, value in scalars.items():
+        writer.add_scalar(name, value, step)
+    writer.flush()
 
 
 def parse_args() -> argparse.Namespace:
@@ -220,7 +241,9 @@ def main() -> None:
 
     CKPT_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+    TB_DIR.mkdir(parents=True, exist_ok=True)
     log_path = LOG_DIR / "train.log"
+    writer = SummaryWriter(log_dir=str(TB_DIR))
 
     config = GPTConfig(block_size=args.block_size)
     model = MiniGPT(config).to(args.device)
@@ -249,8 +272,11 @@ def main() -> None:
         f"T={args.block_size}  max_steps={args.max_steps}"
     )
     print(header)
+    metrics_header = format_metrics_header()
+    print(metrics_header)
     with log_path.open("a", encoding="utf-8") as f:
         f.write(header + "\n")
+        f.write(metrics_header + "\n")
 
     model.train()
     if args.device == "cuda":
@@ -285,6 +311,18 @@ def main() -> None:
                 save_checkpoint(best_path, model, optimizer, scaler, state)
                 print(f"  新的 best val_loss={state.best_val_loss:.4f} -> {best_path}")
 
+            write_tb_scalars(
+                writer,
+                state.step,
+                {
+                    "eval/train_loss": losses["train"],
+                    "eval/train_ppl": train_ppl,
+                    "eval/val_loss": losses["val"],
+                    "eval/val_ppl": val_ppl,
+                    "eval/best_val_loss": state.best_val_loss,
+                },
+            )
+
         optimizer.zero_grad(set_to_none=True)
         micro_loss_sum = 0.0
         for _ in range(args.grad_accum):
@@ -316,6 +354,17 @@ def main() -> None:
             print(line)
             with log_path.open("a", encoding="utf-8") as f:
                 f.write(line + "\n")
+            write_tb_scalars(
+                writer,
+                state.step,
+                {
+                    "train/loss": avg_loss,
+                    "train/ppl": math.exp(min(avg_loss, 20.0)),
+                    "train/lr": lr,
+                    "train/tokens_per_sec": tok_s,
+                    "train/peak_mem_mb": peak_mem,
+                },
+            )
 
         if state.step % args.ckpt_interval == 0 or state.step >= args.max_steps:
             save_checkpoint(latest_path, model, optimizer, scaler, state)
@@ -340,6 +389,18 @@ def main() -> None:
         state.best_val_loss = losses["val"]
         save_checkpoint(best_path, model, optimizer, scaler, state)
         print(f"  新的 best val_loss={state.best_val_loss:.4f} -> {best_path}")
+    write_tb_scalars(
+        writer,
+        state.step,
+        {
+            "eval/train_loss": losses["train"],
+            "eval/train_ppl": train_ppl,
+            "eval/val_loss": losses["val"],
+            "eval/val_ppl": val_ppl,
+            "eval/best_val_loss": state.best_val_loss,
+        },
+    )
+    writer.close()
 
 
 if __name__ == "__main__":

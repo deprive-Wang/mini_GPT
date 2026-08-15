@@ -12,7 +12,7 @@
 
 ## 当前进度
 
-记录日期：2026-08-14
+记录日期：2026-08-15
 
 - [x] 确认项目定位：从零预训练 Mini-GPT，不重训 tokenizer
 - [x] 确认独立 conda 环境名：`Mini_GPT`（用户已开始创建）
@@ -33,7 +33,8 @@
 - [x] 单 batch 前向自检通过：`[16, 512] -> [16, 512, 50257]`，cuda，loss=10.91（接近 ln(50257)≈10.82），参数量 44.9M
 - [x] 写 `train.py`：AdamW、weight_decay 0.1、warmup + cosine、FP16、梯度累积 4、latest/best checkpoint
 - [x] 本机小步数验证：micro batch 16 反向 OOM；`--batch-size 4` 下 20 步 loss 10.95→9.81，val ppl 可算；`--resume` 从 latest 恢复后再跑 2 步
-- [ ] 采样闭环（`sample.py`：greedy / temperature / top-k）
+- [x] 写 `sample.py`：greedy / temperature / top-k；用 22 步 checkpoint 三条路径都已跑通（生成质量差属预期）
+- [x] 训练指标接到 TensorBoard：`experiments/tb`；Mini_GPT 环境已装 `tensorboard`
 
 当前目录现状：
 
@@ -44,11 +45,12 @@ mini_GPT/
   scripts/prepare_data.py   下载并编码 TinyStories，从仓库根目录运行
   dataset.py                memmap 采样 [16, 512]，含错位自检
   model.py                  6 层 Pre-LN Decoder-only；python model.py 自检通过
-  train.py                  AdamW + warmup/cosine + FP16 + 梯度累积 + checkpoint
+  train.py                  AdamW + warmup/cosine + FP16 + 梯度累积 + checkpoint + TensorBoard
+  sample.py                 greedy / temperature / top-k；python sample.py 可验证
   main.py                   空文件
   AGENTS.md                 本文件
   .gitignore                已忽略 data/、checkpoints/、experiments/、.vscode/、权重和缓存
-  requirements.txt          tiktoken / datasets / numpy / torch
+  requirements.txt          tiktoken / datasets / numpy / torch / tensorboard
 ```
 
 ## 固定要求
@@ -108,11 +110,9 @@ checkpoint    每 1,000 steps 存 latest；validation 最优另存 best
 5. 至少 10 组固定 prompt 的生成样例，比较采样参数差异
 6. 完成模型、数据、参数、曲线、显存、生成结果和失败样例的实验记录
 
-## 当前步骤（采样）
+## 当前步骤（第一版闭环完成）
 
-训练闭环已通过本机小步数验证。这一步写 `sample.py`，不提前上 RoPE / RMSNorm / SwiGLU / KV Cache。
-
-当前 `checkpoints/` 里是 22 步冒烟权重，生成质量会很差；`sample.py` 先把 greedy / temperature / top-k 三条路径跑通。正式 10,000 / 30,000 steps 仍按 AutoDL RTX 3090、默认 micro batch 16。
+数据、模型、训练恢复与采样三条路径均已在本机冒烟通过。训练指标会同时写 `experiments/train.log` 和 `experiments/tb`。当前 `checkpoints/` 只有 22 步权重，生成质量差属预期；下一阶段在 AutoDL RTX 3090 上按默认 micro batch 16 跑正式训练，用 TensorBoard 看 loss / val ppl / lr / tokens/sec / 峰值显存，不提前上第二版结构。
 
 ### 当前不要做
 
@@ -128,17 +128,17 @@ checkpoint    每 1,000 steps 存 latest；validation 最优另存 best
 mini_GPT/
   AGENTS.md
   .gitignore
-  requirements.txt          tiktoken / datasets / numpy / torch
+  requirements.txt          tiktoken / datasets / numpy / torch / tensorboard
   main.py                   空文件
   config.py                 待建；第一版超参数目前写在 model.GPTConfig
   model.py                  已建，Decoder-only；python model.py 自检通过
   dataset.py                已建，memmap 采样 [16, 512]
-  train.py                  已建；本机验证用 --batch-size 4，默认仍是 16
-  sample.py                 待建
+  train.py                  已建；本机验证用 --batch-size 4，默认仍是 16；指标写 experiments/tb
+  sample.py                 已建；greedy / temperature / top-k 路径已验证
   scripts/prepare_data.py   已建，下载并编码 TinyStories
   data/                     gitignore；原始文本与 token 序列
   checkpoints/              gitignore；latest.pt / best.pt
-  experiments/              gitignore；曲线、生成样例、日志
+  experiments/              gitignore；train.log、TensorBoard 事件文件 tb/、生成样例
   .vscode/                  gitignore；本机解释器与 IDE 配置
 ```
 
@@ -150,12 +150,18 @@ mini_GPT/
 |---|---|
 | conda 环境 | `Mini_GPT` |
 | 建议解释器 | `D:\Anaconda\envs\Mini_GPT\python.exe` |
-| 当前依赖 | `tiktoken`、`datasets`、`numpy`、`torch`（2.11.0+cu128） |
-| 尚未安装 | 需要 GPT-2 权重对照时再装 `transformers`；训练日志需要时再装 `wandb` / `tqdm` |
+| 当前依赖 | `tiktoken`、`datasets`、`numpy`、`torch`（2.11.0+cu128）、`tensorboard` |
+| 尚未安装 | 需要 GPT-2 权重对照时再装 `transformers`；需要交互进度条时再装 `tqdm`。训练曲线用 TensorBoard，不装 `wandb` |
 | 参考实现 | [karpathy/nanoGPT](https://github.com/karpathy/nanoGPT)，对照工程，不直接照抄 |
 | 论文 | GPT-2 技术报告；TinyStories [arXiv:2305.07759](https://arxiv.org/abs/2305.07759) |
 
-nanoGPT 文档中的安装示例一次装齐；本项目已按步骤补到 `tiktoken` / `datasets` / `numpy` / `torch`。`transformers`、`wandb`、`tqdm` 仍按需再装。
+nanoGPT 文档中的安装示例一次装齐；本项目已按步骤补到 `tiktoken` / `datasets` / `numpy` / `torch` / `tensorboard`。`transformers`、`tqdm` 仍按需再装。
+
+查看训练曲线（仓库根目录，解释器必须是 Mini_GPT 环境）：
+
+```text
+python -m tensorboard --logdir experiments/tb
+```
 
 本仓库任务不要用 Codex 内置 Python（`C:\Users\14000\.cache\codex-runtimes\...`），也不要往 Anaconda `base` 装包。
 
@@ -177,8 +183,8 @@ nanoGPT 文档中的安装示例一次装齐；本项目已按步骤补到 `tikt
 
 ## 下一步
 
-训练闭环已通过本机小步数验证。下一件事先不要上第二版结构：
+第一版功能闭环已完成，下一步转到 AutoDL RTX 3090：
 
-1. 写 `sample.py`：greedy / temperature / top-k
-2. 用当前 checkpoint 把三条采样路径跑通（生成质量会很差，这是预期）
-3. 正式 10,000 / 30,000 steps 仍放到 AutoDL RTX 3090，默认 micro batch 16
+1. 用默认 micro batch 16、梯度累积 4 先跑 10,000 steps；用 TensorBoard（`experiments/tb`）看 loss、val perplexity、lr、tokens/sec 和峰值显存
+2. 确认链路稳定后，再跑 30,000 steps 基线；继续使用 latest / best checkpoint
+3. 用正式 best checkpoint 对至少 10 个固定 prompt 运行 greedy、temperature、top-k，记录参数差异、成功样例和失败样例
