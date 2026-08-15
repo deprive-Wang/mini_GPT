@@ -26,7 +26,8 @@ import torch.nn.functional as F
 from model import GPTConfig, MiniGPT
 
 DEFAULT_PROMPT = "Once upon a time"
-DEFAULT_CHECKPOINT = Path("checkpoints/latest.pt")
+PROJECT_DIR = Path(__file__).resolve().parent
+DEFAULT_CHECKPOINT = PROJECT_DIR / "checkpoints" / "latest.pt"
 
 
 def load_model(checkpoint_path: Path, device: str) -> MiniGPT:

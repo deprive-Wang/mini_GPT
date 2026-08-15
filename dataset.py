@@ -10,24 +10,40 @@
     python dataset.py
 """
 
+from pathlib import Path
+
 import numpy as np
 import torch
 
-DATA_DIR = "data"
+PROJECT_DIR = Path(__file__).resolve().parent
+DATA_DIR = PROJECT_DIR / "data"
 BLOCK_SIZE = 512    # context 长度 T，与 AGENTS.md 第一版规格一致
 BATCH_SIZE = 16     # micro batch，训练时配合梯度累积 4 得到有效 batch 64
 
 
-def load_tokens(split):
+def load_tokens(split: str) -> np.memmap:
     """以 memmap 方式打开 token 流。
 
     449MB 的 train.bin 不整个读进内存：memmap 只在实际切片时按页从磁盘取，
     随机采样每次只碰 513 个 token，开销可以忽略。
     """
-    return np.memmap(f"{DATA_DIR}/{split}.bin", dtype=np.uint16, mode="r")
+    if split not in {"train", "val"}:
+        raise ValueError(f"不支持的数据集划分：{split}")
+
+    token_path = DATA_DIR / f"{split}.bin"
+    if not token_path.is_file():
+        raise FileNotFoundError(
+            f"找不到 {token_path}。请先运行 `python scripts/prepare_data.py` 生成 TinyStories token 数据。"
+        )
+    return np.memmap(token_path, dtype=np.uint16, mode="r")
 
 
-def get_batch(tokens, batch_size=BATCH_SIZE, block_size=BLOCK_SIZE, device="cpu"):
+def get_batch(
+    tokens: np.memmap,
+    batch_size: int = BATCH_SIZE,
+    block_size: int = BLOCK_SIZE,
+    device: torch.device | str = "cpu",
+) -> tuple[torch.Tensor, torch.Tensor]:
     """随机采样一个训练 batch。
 
     返回 x, y，形状都是 [batch_size, block_size]，dtype 为 int64。
@@ -39,8 +55,18 @@ def get_batch(tokens, batch_size=BATCH_SIZE, block_size=BLOCK_SIZE, device="cpu"
     这正是自回归语言模型的训练目标；配合因果 mask，一个长度 T 的样本能同时
     提供 T 个预测任务，而不是只预测末尾一个词。
     """
+    if batch_size <= 0:
+        raise ValueError("batch_size 必须大于 0")
+    if block_size <= 0:
+        raise ValueError("block_size 必须大于 0")
+
     # 起点上界要留出 block_size + 1 个 token，否则最后一个样本会越界
     max_start = len(tokens) - block_size - 1
+    if max_start <= 0:
+        raise ValueError(
+            f"token 数量 {len(tokens):,} 不足以采样 block_size={block_size}；"
+            "请减小 --block-size 或重新准备数据。"
+        )
     starts = torch.randint(max_start, (batch_size,))
 
     # memmap 切片是 uint16，PyTorch 不支持该 dtype，且 embedding 的索引必须是 int64
@@ -51,9 +77,10 @@ def get_batch(tokens, batch_size=BATCH_SIZE, block_size=BLOCK_SIZE, device="cpu"
         torch.from_numpy(tokens[i + 1:i + 1 + block_size].astype(np.int64)) for i in starts
     ])
 
-    if device != "cpu":
+    target_device = torch.device(device)
+    if target_device.type != "cpu":
         # non_blocking 配合 pin_memory 可以让拷贝与计算重叠，这里先保持简单
-        x, y = x.to(device), y.to(device)
+        x, y = x.to(target_device), y.to(target_device)
     return x, y
 
 

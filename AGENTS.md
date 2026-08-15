@@ -112,7 +112,7 @@ checkpoint    每 1,000 steps 存 latest；validation 最优另存 best
 
 ## 当前步骤（第一版闭环完成）
 
-数据、模型、训练恢复与采样三条路径均已在本机冒烟通过。训练指标会同时写 `experiments/train.log` 和 `experiments/tb`。当前 `checkpoints/` 只有 22 步权重，生成质量差属预期；下一阶段在 AutoDL RTX 3090 上按默认 micro batch 16 跑正式训练，用 TensorBoard 看 loss / val ppl / lr / tokens/sec / 峰值显存，不提前上第二版结构。
+数据、模型、训练恢复与采样三条路径均已在本机冒烟通过。训练指标会同时写 `experiments/train.log` 和 `experiments/tb/<run-name>`。当前 `checkpoints/` 只有 22 步权重，生成质量差属预期；下一阶段在 AutoDL RTX 3090 上按默认 micro batch 16 跑正式训练，用 TensorBoard 看 loss / val ppl / lr / tokens/sec / 峰值显存，不提前上第二版结构。
 
 ### 当前不要做
 
@@ -150,18 +150,34 @@ mini_GPT/
 |---|---|
 | conda 环境 | `Mini_GPT` |
 | 建议解释器 | `D:\Anaconda\envs\Mini_GPT\python.exe` |
-| 当前依赖 | `tiktoken`、`datasets`、`numpy`、`torch`（2.11.0+cu128）、`tensorboard` |
+| 当前依赖 | `tiktoken`、`datasets`、`numpy`、云镜像预装的 CUDA `torch`、`tensorboard` |
 | 尚未安装 | 需要 GPT-2 权重对照时再装 `transformers`；需要交互进度条时再装 `tqdm`。训练曲线用 TensorBoard，不装 `wandb` |
 | 参考实现 | [karpathy/nanoGPT](https://github.com/karpathy/nanoGPT)，对照工程，不直接照抄 |
 | 论文 | GPT-2 技术报告；TinyStories [arXiv:2305.07759](https://arxiv.org/abs/2305.07759) |
 
 nanoGPT 文档中的安装示例一次装齐；本项目已按步骤补到 `tiktoken` / `datasets` / `numpy` / `torch` / `tensorboard`。`transformers`、`tqdm` 仍按需再装。
 
+### 云端首次启动
+
+云镜像选预装 CUDA PyTorch 的版本。克隆后先确认当前解释器和 GPU；`requirements.txt` 不含 `torch`，避免 `pip` 覆盖镜像自带的 CUDA 版本：
+
+```text
+python -c "import sys, torch; print(sys.executable); print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
+python -m pip install -r requirements.txt
+python scripts/prepare_data.py
+python train.py --max-steps 20 --eval-interval 10 --eval-iters 4 --batch-size 4 --run-name smoke
+python train.py --max-steps 10000 --run-name baseline-10k
+```
+
+`prepare_data.py` 会自动创建项目内的 `data/` 和 `data/hf_cache/`；`train.py` 会创建 `checkpoints/`、`experiments/`，并把本次 TensorBoard 事件写到 `experiments/tb/<run-name>`。默认不传 `--run-name` 时，使用时间戳目录，避免不同训练的曲线混写。
+
 查看训练曲线（仓库根目录，解释器必须是 Mini_GPT 环境）：
 
 ```text
-python -m tensorboard --logdir experiments/tb
+python -m tensorboard --logdir experiments/tb --host 0.0.0.0 --port 6006
 ```
+
+云平台需要将 `6006` 暴露为自定义服务，或用 SSH 隧道把远端 `6006` 转发到本机后在浏览器访问。
 
 本仓库任务不要用 Codex 内置 Python（`C:\Users\14000\.cache\codex-runtimes\...`），也不要往 Anaconda `base` 装包。
 

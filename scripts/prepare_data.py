@@ -10,12 +10,14 @@
 """
 
 from array import array
+from pathlib import Path
 
 import numpy as np
 import tiktoken
 from datasets import load_dataset
 
-DATA_DIR = "data"           # 相对路径：原始数据缓存与 token 序列都落在这里
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+DATA_DIR = PROJECT_DIR / "data"
 TRAIN_STORIES = 1_000_000   # 全量：train split 前 100 万篇（冒烟阶段用 100 已通过）
 SHARD_SIZE = 1_000          # 每编码多少篇打印一次进度
 EOT_ID = 50256              # <|endoftext|>，分隔两篇故事
@@ -42,11 +44,12 @@ def encode_split(dataset, limit, enc):
 
 
 def main():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     enc = tiktoken.get_encoding("gpt2")
     assert enc.n_vocab == 50257, f"词表大小异常: {enc.n_vocab}"
 
-    print("加载 TinyStories（首次会下载约 2GB 到 data/hf_cache）...")
-    ds = load_dataset("roneneldan/TinyStories", cache_dir=f"{DATA_DIR}/hf_cache")
+    print(f"加载 TinyStories（首次会下载约 2GB 到 {DATA_DIR / 'hf_cache'}）...")
+    ds = load_dataset("roneneldan/TinyStories", cache_dir=str(DATA_DIR / "hf_cache"))
 
     for split, limit, out_name in [
         ("train", TRAIN_STORIES, "train.bin"),
@@ -54,12 +57,12 @@ def main():
     ]:
         print(f"编码 {split} ...")
         arr = encode_split(ds[split], limit, enc)
-        out_path = f"{DATA_DIR}/{out_name}"
+        out_path = DATA_DIR / out_name
         arr.tofile(out_path)
         print(f"  已写入 {out_path}: {len(arr):,} tokens, {arr.nbytes / 1e6:.1f} MB")
 
     # 读回校验：确认写盘格式能被正确解析
-    back = np.fromfile(f"{DATA_DIR}/train.bin", dtype=np.uint16)
+    back = np.fromfile(DATA_DIR / "train.bin", dtype=np.uint16)
     print(f"读回校验，train.bin 前 80 个 token 解码：\n{enc.decode(back[:80].tolist())}")
 
 

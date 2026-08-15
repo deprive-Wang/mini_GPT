@@ -1,6 +1,5 @@
 tiktoken
 datasets
 numpy
-# CUDA 版需指定源：pip install torch --index-url https://download.pytorch.org/whl/cu128
-torch
+# CUDA 版 torch 由本机或云镜像预装；安装本文件时不要覆盖它。
 tensorboard

@@ -14,12 +14,12 @@
 都按 optimizer step 计数，不是按 micro-batch。
 
 用法（仓库根目录，解释器必须是 Mini_GPT 环境）：
-    python train.py --max-steps 20 --eval-interval 10 --eval-iters 4 --batch-size 4
+    python train.py --max-steps 20 --eval-interval 10 --eval-iters 4 --batch-size 4 --warmup-steps 2
     python train.py
     python train.py --max-steps 30000
     python train.py --resume
 
-TensorBoard 事件文件写到 experiments/tb（与 train.log 并列，已 gitignore）。
+TensorBoard 事件文件写到 experiments/tb/<run-name>（与 train.log 并列，已 gitignore）。
 查看曲线（仓库根目录，解释器必须是 Mini_GPT 环境）：
     python -m tensorboard --logdir experiments/tb
 
@@ -30,9 +30,11 @@ TensorBoard 事件文件写到 experiments/tb（与 train.log 并列，已 gitig
 from __future__ import annotations
 
 import argparse
+import atexit
 import math
 import time
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 
 import torch
@@ -56,9 +58,10 @@ EVAL_ITERS = 20
 CKPT_INTERVAL = 1_000
 LOG_INTERVAL = 10
 
-CKPT_DIR = Path("checkpoints")
-LOG_DIR = Path("experiments")
-TB_DIR = LOG_DIR / "tb"   # TensorBoard 事件文件；与 train.log 并列，已 gitignore
+PROJECT_DIR = Path(__file__).resolve().parent
+CKPT_DIR = PROJECT_DIR / "checkpoints"
+LOG_DIR = PROJECT_DIR / "experiments"
+TB_DIR = LOG_DIR / "tb"
 
 
 @dataclass
@@ -74,7 +77,7 @@ def configure_optimizer(
     weight_decay: float,
     learning_rate: float,
     betas: tuple[float, float],
-    device: str,
+    device: torch.device,
 ) -> torch.optim.AdamW:
     """AdamW 参数分组。
 
@@ -98,7 +101,7 @@ def configure_optimizer(
         else:
             no_decay.append(param)
 
-    fused = device == "cuda"
+    fused = device.type == "cuda"
     return torch.optim.AdamW(
         [
             {"params": decay, "weight_decay": weight_decay},
@@ -132,7 +135,7 @@ def estimate_loss(
     batch_size: int,
     block_size: int,
     eval_iters: int,
-    device: str,
+    device: torch.device,
 ) -> dict[str, float]:
     """各 split 上随机抽 eval_iters 个 batch，返回平均 cross-entropy。
 
@@ -145,7 +148,7 @@ def estimate_loss(
         total = 0.0
         for _ in range(eval_iters):
             x, y = get_batch(tokens, batch_size, block_size, device)
-            with autocast(device, dtype=torch.float16):
+            with autocast(device.type, dtype=torch.float16):
                 _, loss = model(x, y)
             total += float(loss.item())
         out[name] = total / eval_iters
@@ -218,6 +221,50 @@ def write_tb_scalars(writer: SummaryWriter, step: int, scalars: dict[str, float]
     writer.flush()
 
 
+def validate_args(args: argparse.Namespace) -> torch.device:
+    """在启动模型和读数据前校验训练参数，避免循环内才暴露除零或 CUDA 错误。"""
+    positive_names = (
+        "max_steps",
+        "batch_size",
+        "block_size",
+        "grad_accum",
+        "eval_interval",
+        "eval_iters",
+        "ckpt_interval",
+        "log_interval",
+    )
+    for name in positive_names:
+        if getattr(args, name) <= 0:
+            raise SystemExit(f"--{name.replace('_', '-')} 必须大于 0")
+    if args.warmup_steps < 0:
+        raise SystemExit("--warmup-steps 不能小于 0")
+    if args.warmup_steps > args.max_steps:
+        raise SystemExit("--warmup-steps 不能超过 --max-steps")
+
+    try:
+        device = torch.device(args.device)
+    except RuntimeError as error:
+        raise SystemExit(f"无效的 --device={args.device}: {error}") from error
+    if device.type != "cuda":
+        raise SystemExit("第一版训练按 CUDA + FP16 设计，请使用 --device cuda 或 --device cuda:0")
+    if not torch.cuda.is_available():
+        raise SystemExit("未检测到可用 CUDA。请确认云镜像的 PyTorch 能执行 torch.cuda.is_available()。")
+    if device.index is not None and device.index >= torch.cuda.device_count():
+        raise SystemExit(
+            f"--device {device} 不存在；当前只检测到 {torch.cuda.device_count()} 张 CUDA GPU。"
+        )
+    return device
+
+
+def build_run_dir(log_dir: Path, run_name: str | None) -> Path:
+    """每次训练使用独立 TensorBoard 事件目录，避免曲线互相混写。"""
+    name = run_name or datetime.now().strftime("%Y%m%d-%H%M%S")
+    run_dir = log_dir / name
+    if run_dir.exists():
+        raise SystemExit(f"TensorBoard 运行目录已存在：{run_dir}。请指定新的 --run-name。")
+    return run_dir
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Mini-GPT 第一版训练")
     parser.add_argument("--max-steps", type=int, default=MAX_STEPS)
@@ -229,6 +276,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-iters", type=int, default=EVAL_ITERS)
     parser.add_argument("--ckpt-interval", type=int, default=CKPT_INTERVAL)
     parser.add_argument("--log-interval", type=int, default=LOG_INTERVAL)
+    parser.add_argument("--log-dir", type=Path, default=TB_DIR)
+    parser.add_argument("--run-name", type=str, default=None)
     parser.add_argument("--resume", action="store_true", help="从 checkpoints/latest.pt 恢复")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     return parser.parse_args()
@@ -236,19 +285,20 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    if args.device == "cpu":
-        raise SystemExit("第一版训练按 CUDA + FP16 设计，当前没有可用 GPU")
+    device = validate_args(args)
+    run_dir = build_run_dir(args.log_dir, args.run_name)
 
     CKPT_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    TB_DIR.mkdir(parents=True, exist_ok=True)
+    run_dir.mkdir(parents=True, exist_ok=True)
     log_path = LOG_DIR / "train.log"
-    writer = SummaryWriter(log_dir=str(TB_DIR))
+    writer = SummaryWriter(log_dir=str(run_dir))
+    atexit.register(writer.close)
 
     config = GPTConfig(block_size=args.block_size)
-    model = MiniGPT(config).to(args.device)
-    optimizer = configure_optimizer(model, WEIGHT_DECAY, PEAK_LR, BETAS, args.device)
-    scaler = GradScaler(args.device)
+    model = MiniGPT(config).to(device)
+    optimizer = configure_optimizer(model, WEIGHT_DECAY, PEAK_LR, BETAS, device)
+    scaler = GradScaler(device.type)
     state = TrainState(step=0, best_val_loss=float("inf"))
 
     latest_path = CKPT_DIR / "latest.pt"
@@ -256,7 +306,7 @@ def main() -> None:
     if args.resume:
         if not latest_path.exists():
             raise SystemExit(f"找不到 {latest_path}，无法 --resume")
-        state = load_checkpoint(latest_path, model, optimizer, scaler, args.device)
+        state = load_checkpoint(latest_path, model, optimizer, scaler, device)
         print(f"已从 {latest_path} 恢复：step={state.step}  best_val_loss={state.best_val_loss:.4f}")
 
     train_tokens = load_tokens("train")
@@ -266,21 +316,23 @@ def main() -> None:
     tokens_per_step = args.batch_size * args.block_size * args.grad_accum
     n_params = model.num_parameters()
     header = (
-        f"MiniGPT {n_params / 1e6:.1f}M  device={args.device}  "
+        f"MiniGPT {n_params / 1e6:.1f}M  device={device}  "
         f"micro_batch={args.batch_size}  accum={args.grad_accum}  "
         f"effective_batch={args.batch_size * args.grad_accum}  "
         f"T={args.block_size}  max_steps={args.max_steps}"
     )
     print(header)
+    print(f"TensorBoard: {run_dir}")
     metrics_header = format_metrics_header()
     print(metrics_header)
     with log_path.open("a", encoding="utf-8") as f:
         f.write(header + "\n")
+        f.write(f"TensorBoard: {run_dir}\n")
         f.write(metrics_header + "\n")
 
     model.train()
-    if args.device == "cuda":
-        torch.cuda.reset_peak_memory_stats()
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(device)
 
     running_loss = 0.0
     t0 = time.perf_counter()
@@ -293,7 +345,7 @@ def main() -> None:
         # 每个 optimizer step 前做一次 eval：step 0 给出随机初始化基线
         if state.step % args.eval_interval == 0:
             losses = estimate_loss(
-                model, splits, args.batch_size, args.block_size, args.eval_iters, args.device
+                model, splits, args.batch_size, args.block_size, args.eval_iters, device
             )
             val_ppl = math.exp(min(losses["val"], 20.0))
             train_ppl = math.exp(min(losses["train"], 20.0))
@@ -326,8 +378,8 @@ def main() -> None:
         optimizer.zero_grad(set_to_none=True)
         micro_loss_sum = 0.0
         for _ in range(args.grad_accum):
-            x, y = get_batch(train_tokens, args.batch_size, args.block_size, args.device)
-            with autocast(args.device, dtype=torch.float16):
+            x, y = get_batch(train_tokens, args.batch_size, args.block_size, device)
+            with autocast(device.type, dtype=torch.float16):
                 _, loss = model(x, y)
             micro_loss_sum += float(loss.item())
             scaler.scale(loss / args.grad_accum).backward()
@@ -348,7 +400,9 @@ def main() -> None:
             running_loss = 0.0
             tok_s = tokens_per_step * args.log_interval / max(dt, 1e-9)
             peak_mem = (
-                torch.cuda.max_memory_allocated() / (1024 * 1024) if args.device == "cuda" else 0.0
+                torch.cuda.max_memory_allocated(device) / (1024 * 1024)
+                if device.type == "cuda"
+                else 0.0
             )
             line = format_metrics(state.step, args.max_steps, avg_loss, lr, tok_s, peak_mem)
             print(line)
@@ -373,7 +427,7 @@ def main() -> None:
     # 循环里的 eval 发生在 step 更新之前，退出时永远不会在 max_steps 上 eval。
     # 收尾补一次，短跑和正式训练结束都能看到最终 val ppl。
     losses = estimate_loss(
-        model, splits, args.batch_size, args.block_size, args.eval_iters, args.device
+        model, splits, args.batch_size, args.block_size, args.eval_iters, device
     )
     val_ppl = math.exp(min(losses["val"], 20.0))
     train_ppl = math.exp(min(losses["train"], 20.0))
@@ -401,6 +455,7 @@ def main() -> None:
         },
     )
     writer.close()
+    atexit.unregister(writer.close)
 
 
 if __name__ == "__main__":
