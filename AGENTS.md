@@ -12,7 +12,7 @@
 
 ## 当前进度
 
-记录日期：2026-08-15
+记录日期：2026-08-16
 
 - [x] 确认项目定位：从零预训练 Mini-GPT，不重训 tokenizer
 - [x] 确认独立 conda 环境名：`Mini_GPT`（用户已开始创建）
@@ -35,6 +35,9 @@
 - [x] 本机小步数验证：micro batch 16 反向 OOM；`--batch-size 4` 下 20 步 loss 10.95→9.81，val ppl 可算；`--resume` 从 latest 恢复后再跑 2 步
 - [x] 写 `sample.py`：greedy / temperature / top-k；用 22 步 checkpoint 三条路径都已跑通（生成质量差属预期）
 - [x] 训练指标接到 TensorBoard：`experiments/tb`；Mini_GPT 环境已装 `tensorboard`
+- [x] AutoDL RTX 3090 正式训练：定时关机前完成 26,000 steps；best val_loss 1.4395 / val ppl 4.22（step 24,000），约 90k tokens/sec、峰值显存 7.8GB；权重与曲线已回传本机
+- [x] 10 组固定 prompt × greedy/temperature/top-k 共 30 份生成样例：`experiments/samples/`，成功/失败标注与模式对比见 `samples.md`
+- [x] 实验记录整理为 `README.md`：模型/数据/参数/27 点验证曲线/显存/速度/生成与失败样例/快速开始，作为 GitHub 入口文档
 
 当前目录现状：
 
@@ -47,7 +50,7 @@ mini_GPT/
   model.py                  6 层 Pre-LN Decoder-only；python model.py 自检通过
   train.py                  AdamW + warmup/cosine + FP16 + 梯度累积 + checkpoint + TensorBoard
   sample.py                 greedy / temperature / top-k；python sample.py 可验证
-  main.py                   空文件
+  README.md                 项目说明 + 第一版实验记录（GitHub 入口）
   AGENTS.md                 本文件
   .gitignore                已忽略 data/、checkpoints/、experiments/、.vscode/、权重和缓存
   requirements.txt          tiktoken / datasets / numpy / torch / tensorboard
@@ -93,8 +96,8 @@ weight_decay  0.1
 micro batch   16
 梯度累积      4
 有效 batch    64
-先跑          10,000 steps 验证数据和训练链路
-再跑          30,000 steps 基线
+先跑          20 steps smoke 验证数据和训练链路
+正式训练      100,000 optimizer steps（约 14.6 个 token epoch）
 checkpoint    每 1,000 steps 存 latest；validation 最优另存 best
 记录          loss、perplexity、learning rate、tokens/sec、峰值显存
 ```
@@ -110,9 +113,9 @@ checkpoint    每 1,000 steps 存 latest；validation 最优另存 best
 5. 至少 10 组固定 prompt 的生成样例，比较采样参数差异
 6. 完成模型、数据、参数、曲线、显存、生成结果和失败样例的实验记录
 
-## 当前步骤（第一版闭环完成）
+## 当前步骤（第一版完成）
 
-数据、模型、训练恢复与采样三条路径均已在本机冒烟通过。训练指标会同时写 `experiments/train.log` 和 `experiments/tb/<run-name>`。当前 `checkpoints/` 只有 22 步权重，生成质量差属预期；下一阶段在 AutoDL RTX 3090 上按默认 micro batch 16 跑正式训练，用 TensorBoard 看 loss / val ppl / lr / tokens/sec / 峰值显存，不提前上第二版结构。
+验收标准 6 条已全部满足：数据与模型自检、loss/ppl 曲线、latest/best 恢复、三种采样、30 份固定 prompt 样例、实验记录（`experiments/samples/samples.md` + TensorBoard `experiments/tb/baseline-100k`）。当前基线是 AutoDL 26,000 steps 的 `best.pt`（step 24,000，val ppl 4.22），能生成结构完整的 TinyStories 风格故事；系统性弱点是长程实体一致性与物理常识，详见 samples.md 的失败样例。
 
 ### 当前不要做
 
@@ -127,9 +130,9 @@ checkpoint    每 1,000 steps 存 latest；validation 最优另存 best
 ```text
 mini_GPT/
   AGENTS.md
+  README.md                 项目说明 + 第一版实验记录
   .gitignore
   requirements.txt          tiktoken / datasets / numpy / torch / tensorboard
-  main.py                   空文件
   config.py                 待建；第一版超参数目前写在 model.GPTConfig
   model.py                  已建，Decoder-only；python model.py 自检通过
   dataset.py                已建，memmap 采样 [16, 512]
@@ -165,8 +168,8 @@ nanoGPT 文档中的安装示例一次装齐；本项目已按步骤补到 `tikt
 python -c "import sys, torch; print(sys.executable); print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
 python -m pip install -r requirements.txt
 python scripts/prepare_data.py
-python train.py --max-steps 20 --eval-interval 10 --eval-iters 4 --batch-size 4 --run-name smoke
-python train.py --max-steps 10000 --run-name baseline-10k
+python train.py --max-steps 20 --warmup-steps 2 --eval-interval 10 --eval-iters 4 --batch-size 4 --run-name smoke
+python train.py --max-steps 100000 --run-name baseline-100k
 ```
 
 `prepare_data.py` 会自动创建项目内的 `data/` 和 `data/hf_cache/`；`train.py` 会创建 `checkpoints/`、`experiments/`，并把本次 TensorBoard 事件写到 `experiments/tb/<run-name>`。默认不传 `--run-name` 时，使用时间戳目录，避免不同训练的曲线混写。
@@ -193,14 +196,13 @@ python -m tensorboard --logdir experiments/tb --host 0.0.0.0 --port 6006
 ## 当前风险或缺口
 
 - 完整训练按 AutoDL 单卡 RTX 3090 24GB、默认 micro batch 16 设计。本机 RTX 3070 Laptop 8GB 能跑 `[16, 512]` eval 前向，但 FP16 反向会 OOM；本机验证链路用 `--batch-size 4`
-- 当前 `checkpoints/` 是 22 步冒烟权重，只能用来测恢复和采样接口，不能当生成质量基线
+- 当前 `checkpoints/` 是 26,000 steps 基线：`best.pt`（step 24,000）用于生成与评测，`latest.pt`（step 26,000）用于 `--resume` 续训；不要在新训练前删除
 - 第一版超参数目前写在 `model.GPTConfig`，训练超参写在 `train.py`，尚未拆到独立 `config.py`
 - 旧 AutoDL `transformer` 环境出现过「conda 已列出包但 Python 导不进」；Mini-GPT 用 GPT-2 BPE，不依赖 SentencePiece，但装新依赖时仍要核对 `sys.executable`
 
 ## 下一步
 
-第一版功能闭环已完成，下一步转到 AutoDL RTX 3090：
+第一版已完成（训练 26,000 steps + 30 份生成样例 + README 实验记录）。可选方向：
 
-1. 用默认 micro batch 16、梯度累积 4 先跑 10,000 steps；用 TensorBoard（`experiments/tb`）看 loss、val perplexity、lr、tokens/sec 和峰值显存
-2. 确认链路稳定后，再跑 30,000 steps 基线；继续使用 latest / best checkpoint
-3. 用正式 best checkpoint 对至少 10 个固定 prompt 运行 greedy、temperature、top-k，记录参数差异、成功样例和失败样例
+1. 续训冲完整 100,000 steps：云端用 `latest.pt` + `--resume`，按实测 90k tokens/sec 折算剩余 74k 步约 7.5 小时
+2. 第二版结构对照：RoPE / RMSNorm / SwiGLU / KV Cache，与第一版基线对比 val ppl 与生成质量

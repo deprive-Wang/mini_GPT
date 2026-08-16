@@ -35,6 +35,9 @@ runs/
 # 本地 IDE（解释器路径、conda 管理器等本机配置）
 .vscode/
 
+# Agent 会话目录（本地工具的计划与临时文件）
+.zcode/
+
 # OS
 .DS_Store
 Thumbs.db

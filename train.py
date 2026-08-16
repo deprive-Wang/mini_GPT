@@ -51,7 +51,8 @@ WEIGHT_DECAY = 0.1
 BETAS = (0.9, 0.95)    # GPT 系常用；AdamW 默认 (0.9, 0.999) 对 LM 偏慢
 GRAD_CLIP = 1.0
 GRAD_ACCUM = 4
-MAX_STEPS = 10_000     # 先跑 1 万步验证链路；基线再显式传 --max-steps 30000
+EPOCHS = 1.0            # 未显式指定 max_steps 时的备用目标
+MAX_STEPS = 100_000     # 云端正式训练默认 10 万 optimizer steps
 WARMUP_STEPS = 200
 EVAL_INTERVAL = 1_000
 EVAL_ITERS = 20
@@ -224,7 +225,6 @@ def write_tb_scalars(writer: SummaryWriter, step: int, scalars: dict[str, float]
 def validate_args(args: argparse.Namespace) -> torch.device:
     """在启动模型和读数据前校验训练参数，避免循环内才暴露除零或 CUDA 错误。"""
     positive_names = (
-        "max_steps",
         "batch_size",
         "block_size",
         "grad_accum",
@@ -236,10 +236,12 @@ def validate_args(args: argparse.Namespace) -> torch.device:
     for name in positive_names:
         if getattr(args, name) <= 0:
             raise SystemExit(f"--{name.replace('_', '-')} 必须大于 0")
+    if args.epochs <= 0:
+        raise SystemExit("--epochs 必须大于 0")
+    if args.max_steps is not None and args.max_steps <= 0:
+        raise SystemExit("--max-steps 必须大于 0")
     if args.warmup_steps < 0:
         raise SystemExit("--warmup-steps 不能小于 0")
-    if args.warmup_steps > args.max_steps:
-        raise SystemExit("--warmup-steps 不能超过 --max-steps")
 
     try:
         device = torch.device(args.device)
@@ -265,9 +267,26 @@ def build_run_dir(log_dir: Path, run_name: str | None) -> Path:
     return run_dir
 
 
+def resolve_max_steps(args: argparse.Namespace, train_token_count: int) -> tuple[int, float, float]:
+    """把 token 数换算成 optimizer steps；随机有放回采样下的 epoch 是近似值。"""
+    tokens_per_step = args.batch_size * args.block_size * args.grad_accum
+    steps_per_epoch = train_token_count / tokens_per_step
+    max_steps = args.max_steps or math.ceil(args.epochs * steps_per_epoch)
+    effective_epochs = max_steps / steps_per_epoch
+    if args.warmup_steps > max_steps:
+        raise SystemExit("--warmup-steps 不能超过最终 max_steps")
+    return max_steps, steps_per_epoch, effective_epochs
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Mini-GPT 第一版训练")
-    parser.add_argument("--max-steps", type=int, default=MAX_STEPS)
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=MAX_STEPS,
+        help="最大 optimizer steps；不传时根据 --epochs 和 train.bin 自动计算",
+    )
+    parser.add_argument("--epochs", type=float, default=EPOCHS)
     parser.add_argument("--warmup-steps", type=int, default=WARMUP_STEPS)
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE)
     parser.add_argument("--block-size", type=int, default=BLOCK_SIZE)
@@ -313,20 +332,26 @@ def main() -> None:
     val_tokens = load_tokens("val")
     splits = {"train": train_tokens, "val": val_tokens}
 
+    args.max_steps, steps_per_epoch, effective_epochs = resolve_max_steps(
+        args, len(train_tokens)
+    )
     tokens_per_step = args.batch_size * args.block_size * args.grad_accum
     n_params = model.num_parameters()
     header = (
         f"MiniGPT {n_params / 1e6:.1f}M  device={device}  "
         f"micro_batch={args.batch_size}  accum={args.grad_accum}  "
         f"effective_batch={args.batch_size * args.grad_accum}  "
-        f"T={args.block_size}  max_steps={args.max_steps}"
+        f"T={args.block_size}  max_steps={args.max_steps}  "
+        f"steps_per_epoch={steps_per_epoch:.0f}  epochs={effective_epochs:.2f}"
     )
     print(header)
+    print(f"tokens_per_step: {tokens_per_step:,}")
     print(f"TensorBoard: {run_dir}")
     metrics_header = format_metrics_header()
     print(metrics_header)
     with log_path.open("a", encoding="utf-8") as f:
         f.write(header + "\n")
+        f.write(f"tokens_per_step: {tokens_per_step:,}\n")
         f.write(f"TensorBoard: {run_dir}\n")
         f.write(metrics_header + "\n")
 
