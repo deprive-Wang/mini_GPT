@@ -25,6 +25,10 @@ venv/
 *.safetensors
 *.ckpt
 .cache/
+
+# 当前基线 checkpoint 通过 Git LFS 保存
+!checkpoints/
+!checkpoints/*.pt
 huggingface/
 hf_cache/
 
