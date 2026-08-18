@@ -1,0 +1,8 @@
+prompt: One day, a little boy found a magic box
+mode: top-k  temperature: 0.8  top_k: 40  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+One day, a little boy found a magic box in the park. He was very excited and wanted to see what was inside. He opened it and found a big, soft blanket. The boy put the blanket on the floor and started to play.
+
+The boy loved his magic blanket. He played with it all day long. When the sun went down, the boy put the cover back in the box. He felt very happy and grateful for the magical blanket. From that day on, he took the magic blanket with him everywhere he went.<|endoftext|>Once upon a time, there was a little girl named Lily. She loved to play with her

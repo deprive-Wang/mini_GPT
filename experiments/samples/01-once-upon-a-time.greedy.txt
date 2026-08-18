@@ -1,0 +1,12 @@
+prompt: Once upon a time
+mode: greedy  temperature: 1.0  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+Once upon a time, there was a little girl named Lily. She loved to play outside in the park with her friends. One day, they found a big box of junk. It was very old and had been there for a long time. 
+
+Lily's friend, Timmy, said, "Let's play with the junk!" 
+
+Lily said, "No, that's not a good idea. We should ask someone first." 
+
+But Timmy didn't listen and they started to play with the junk. Suddenly, the junk started to move and it was very heavy.

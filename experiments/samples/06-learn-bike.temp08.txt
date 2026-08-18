@@ -1,0 +1,8 @@
+prompt: Sara wanted to learn how to ride a bike
+mode: temperature  temperature: 0.8  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+Sara wanted to learn how to ride a bike too. She asked her mom, "Mom, can I ride a bike like you?" Her mom smiled and said, "Yes, Sara. You can ride a bike like me. But you have to wear your helmet and wear your helmet. It is cold and wet."
+
+Sara put on her helmet and put on her helmet. She felt happy and cool. She said, "Mom, I love riding my bike. Can I ride a bike like you?" Her mom said, "Yes, Sara. You can ride a bike like me. But you have to wear your helmet and

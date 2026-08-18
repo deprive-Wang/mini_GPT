@@ -1,0 +1,12 @@
+prompt: The old man lived in a small house by the sea
+mode: greedy  temperature: 1.0  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+The old man lived in a small house by the sea. He had a big garden with many flowers and trees. One day, he saw a little girl playing in the garden. She was very happy and she smiled at the old man.
+
+The old man felt happy too. He wanted to make the little girl happy. So he went to the old man and said, "Hello, I am the old man. I am a nice man. Do you want to play with me?"
+
+The little girl looked at the old man and said, "Yes, please!"
+
+The old man and the little girl played together in the garden

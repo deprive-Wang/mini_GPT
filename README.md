@@ -4,6 +4,8 @@
 
 本文档同时是项目说明和第一版实验记录。
 
+> **仓库不包含训练数据和模型权重。** `data/`、`checkpoints/`、TensorBoard 日志会在 clone 后重新生成；如果要保留当前 26,000 步基线，请在删除本地目录前把 `checkpoints/best.pt` 和 `checkpoints/latest.pt` 复制到仓库外的可靠存储。`best.pt` 用于推理，`latest.pt` 用于 `--resume` 续训。
+
 ## 模型
 
 6 层 Pre-LayerNorm Decoder-only，参数量 44.9M：
@@ -131,12 +133,37 @@
 
 ## 快速开始
 
-### 本机推理（PowerShell）
+### 从 Git 重新开始（PowerShell）
 
 ```powershell
-conda activate Mini_GPT
-cd <仓库路径>
+git clone <仓库 URL>
+cd mini_GPT
 
+conda create -n Mini_GPT python=3.11 -y
+conda activate Mini_GPT
+python -m pip install -r requirements.txt
+```
+
+`requirements.txt` 不安装 `torch`，避免覆盖本机或云镜像中匹配 CUDA 的版本。安装后先确认 `torch.cuda.is_available()`；没有 CUDA 时可以用很小的 batch 做链路自检，但正式训练建议使用带 CUDA 的 PyTorch 环境。
+
+### 重新准备数据（PowerShell）
+
+```powershell
+python scripts/prepare_data.py
+```
+
+脚本会下载 TinyStories，并在仓库内生成被 gitignore 的 `data/train.bin`、`data/val.bin` 和 Hugging Face 缓存。数据准备完成后可运行：
+
+```powershell
+python model.py
+python dataset.py
+```
+
+### 本机推理（PowerShell）
+
+需要先把外部备份的 `best.pt` 复制到 `checkpoints/best.pt`：
+
+```powershell
 python sample.py --checkpoint checkpoints/best.pt --prompt "Once upon a time" --mode top-k --top-k 40 --temperature 0.8 --max-new-tokens 200 --seed 42
 ```
 
@@ -153,8 +180,10 @@ python scripts/prepare_data.py
 # 20 步 smoke（小卡用 --batch-size 4）
 python train.py --max-steps 20 --warmup-steps 2 --eval-interval 10 --eval-iters 4 --batch-size 4 --run-name smoke
 
-# 正式训练 / 断点续训
+# 正式训练（没有外部 checkpoint 时从头开始）
 python train.py --max-steps 100000 --run-name baseline-100k
+
+# 从外部备份恢复：先将 latest.pt 放到 checkpoints/latest.pt
 python train.py --max-steps 100000 --resume --run-name baseline-100k-resume
 
 # TensorBoard（云平台把 6006 暴露为自定义服务，或走 SSH 隧道）
@@ -179,11 +208,13 @@ mini_GPT/
   scripts/prepare_data.py   下载 TinyStories 并编码为 data/*.bin
   data/                     gitignore；train.bin / val.bin
   checkpoints/              gitignore；latest.pt / best.pt
-  experiments/              gitignore；train.log、tb/、samples/
+  experiments/samples/      已提交；30 份固定 prompt 生成样例与标注
+  experiments/tb/           gitignore；TensorBoard 事件文件
+  experiments/*.log         gitignore；训练日志
   requirements.txt          tiktoken / datasets / numpy / tensorboard
 ```
 
-权重与数据不入库，仓库只含代码与文档。
+代码、实验样例和文档入库；训练数据、Hugging Face 缓存、TensorBoard 日志、训练日志和模型权重不入库。删除本地环境前，请单独备份 `checkpoints/best.pt` 与 `checkpoints/latest.pt`。
 
 ## 参考
 

@@ -1,0 +1,8 @@
+prompt: The little dog woke up early in the morning and
+mode: greedy  temperature: 1.0  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+The little dog woke up early in the morning and ran to the window. He saw the little dog and barked. The little dog was so happy to see the little dog. They played together all day long. The little dog was not lonely anymore.<|endoftext|>Once upon a time, there was a little girl named Lily. She loved to play outside in the sun. One day, she found a big, red ball. She was so happy and excited to play with it.
+
+Lily's mom saw her playing with the ball and said, "Lily, you must be careful with the ball. It is very heavy and you might

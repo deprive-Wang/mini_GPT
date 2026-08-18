@@ -1,0 +1,14 @@
+prompt: Tom and Lily were best friends. They liked to
+mode: greedy  temperature: 1.0  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+Tom and Lily were best friends. They liked to play in the park and share their toys. One day, they saw a big dog in the park. The dog was brown and furry. It had a long tail and a wet nose.
+
+"Wow, look at that dog!" Tom said. "It is so big and scary!"
+
+"I want to pet it!" Lily said. "It looks so soft and cute!"
+
+They ran to the dog and tried to touch it. The dog did not like that. It growled and showed its teeth.
+
+"Go away, dog!" Tom said. "You

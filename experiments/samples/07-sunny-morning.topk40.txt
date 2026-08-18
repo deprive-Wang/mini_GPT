@@ -1,0 +1,10 @@
+prompt: One sunny morning, the birds were singing and
+mode: top-k  temperature: 0.8  top_k: 40  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+One sunny morning, the birds were singing and flying around the trees. The sun was shining and the birds were singing. Suddenly, the wind started to pick up and the sky became dark. The birds were scared, but then they saw a beautiful sunrise. It was so bright and beautiful!
+
+The birds were so happy and they started to sing. They sang and sang until the sun started to set. Then, suddenly, the birds saw a distant rainbow. It was so beautiful that they almost forgot how scared they were.
+
+The birds were so excited, they flew closer and closer. They could hear the wind in the sky and

@@ -1,0 +1,12 @@
+prompt: In the forest, there lived a little fox who
+mode: greedy  temperature: 1.0  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+In the forest, there lived a little fox who was very hungry. He wanted to find some food, but he couldn't find anything. He looked and looked, but he couldn't find anything.
+
+Then, he saw a big tree with lots of yummy fruit. He was so happy! He ran over to the tree and started to eat the fruit.
+
+But then, he heard a voice. It was a little bird who said, "Hey, why don't you come and eat the fruit?"
+
+The little fox was so hungry that he couldn't resist. He said, "I'm so hungry, I can

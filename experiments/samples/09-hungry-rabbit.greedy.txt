@@ -1,0 +1,12 @@
+prompt: Billy the rabbit was very hungry. He decided to
+mode: greedy  temperature: 1.0  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+Billy the rabbit was very hungry. He decided to go to the store to buy some food. He hopped to the store and bought some food.
+
+When he got home, he was so excited. He hopped into the store and started to eat. But then he saw something strange. There was a big, scary monster!
+
+Billy was so scared that he started to cry. But then he remembered that he had a friend. He hopped out of the store and ran to the monster.
+
+The monster was very friendly and he asked Billy why he was crying. Billy told him that he was scared of the monster and he was so

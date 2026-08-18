@@ -141,7 +141,9 @@ mini_GPT/
   scripts/prepare_data.py   已建，下载并编码 TinyStories
   data/                     gitignore；原始文本与 token 序列
   checkpoints/              gitignore；latest.pt / best.pt
-  experiments/              gitignore；train.log、TensorBoard 事件文件 tb/、生成样例
+  experiments/samples/      纳入 git；30 份生成样例与 samples.md
+  experiments/tb/           gitignore；TensorBoard 事件文件
+  experiments/*.log         gitignore；训练日志
   .vscode/                  gitignore；本机解释器与 IDE 配置
 ```
 

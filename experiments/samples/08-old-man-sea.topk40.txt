@@ -1,0 +1,9 @@
+prompt: The old man lived in a small house by the sea
+mode: top-k  temperature: 0.8  top_k: 40  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+The old man lived in a small house by the sea. He was very happy and loved to watch the kids play in the sand. One day, he saw a little girl who was sad because she lost her toy. The old man wanted to help the girl, so he called his owner to come and look for it.
+
+After a few days, the old man's owner found the toy and gave it back to the little girl. The little girl was very happy and thanked the old man. The old man smiled and said, "You are welcome, my dear, and you are a hero. I am always here to help you."
+

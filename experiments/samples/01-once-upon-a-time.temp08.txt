@@ -1,0 +1,10 @@
+prompt: Once upon a time
+mode: temperature  temperature: 0.8  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+Once upon a time, there was a little girl named Lily. She loved to play outside and pick flowers. One day, she found a beautiful crystal necklace buried in the ground. It was brilliant and sparkly, and she was so happy.
+
+Lily decided to take the crystal necklace home and show it to her mom. Her mom was so proud of her and said, "You are such a brave girl." Lily felt happy that she had found something so brilliant.
+
+The moral of the story is that even though something might look beautiful, it's important to be careful with it and not let it

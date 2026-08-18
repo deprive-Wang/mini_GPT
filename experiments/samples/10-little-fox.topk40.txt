@@ -1,0 +1,10 @@
+prompt: In the forest, there lived a little fox who
+mode: top-k  temperature: 0.8  top_k: 40  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+In the forest, there lived a little fox who was very hungry. He wanted to find something to eat but he was too tired to walk. He looked around and saw a big, red apple. He was so happy!
+
+He took a big bite of the juicy apple and it was so delicious! The fox was so happy he started to run. But then he heard a noise. He looked around and saw a big, scary wolf. He was scared.
+
+The wolf had seen the little fox and he knew he had to eat him. He ran as fast as he could, but the wolf was too fast. Suddenly he couldn

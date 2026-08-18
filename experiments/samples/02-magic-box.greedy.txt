@@ -1,0 +1,10 @@
+prompt: One day, a little boy found a magic box
+mode: greedy  temperature: 1.0  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+One day, a little boy found a magic box. He was very excited. He opened the box and found a note inside. The note said, "I am a magic box. I can make you happy."
+
+The boy was very happy. He put the note in his pocket and went to find his friends. He told them about the magic box and the note. His friends were excited too. They all played together and had lots of fun.
+
+The boy's friends were happy too. They learned that magic can make people happy. And they all lived happily ever after.<|endoftext|>Once upon a time, there was a little girl

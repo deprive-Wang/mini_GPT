@@ -1,0 +1,8 @@
+prompt: There was a big tree in the garden
+mode: top-k  temperature: 0.8  top_k: 40  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+There was a big tree in the garden. The tree was very tall and had many branches. One day, a little bird flew up to the tree and said, "Hello, tree. You are so big and pretty. I wish I could fly like you". The tree smiled and said, "I can help you fly, little bird. Just follow me".
+
+The bird and the tree went to the top of the tree and the bird felt happy. But then, the bird flew away and the bird got lost. The bird was very sad and scared. The tree heard the bird cry and tried to help the bird. But

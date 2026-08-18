@@ -1,0 +1,12 @@
+prompt: Tom and Lily were best friends. They liked to
+mode: top-k  temperature: 0.8  top_k: 40  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+Tom and Lily were best friends. They liked to play in the park and share their toys. One day, they saw a big box near the slide. It was shiny and had a handle. They ran to the box and opened it. Inside, they found a lot of money and jewels.
+
+"Wow, look at all these!" Tom said. "I want to take them to the moon!"
+
+"No, Tom, that's not nice. That's stealing. Give them back. Put them back." Lily said.
+
+But Tom did not listen. He took a handful of money and ran away. Lily followed him

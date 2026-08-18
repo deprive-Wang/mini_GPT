@@ -1,0 +1,14 @@
+prompt: One sunny morning, the birds were singing and
+mode: greedy  temperature: 1.0  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+One sunny morning, the birds were singing and the sun was shining. The birds were singing and the trees were green.
+
+The little girl was so excited. She wanted to go outside and play. She ran outside and saw a big tree. She ran over and started to climb it.
+
+The little girl was so happy. She felt like she was flying. She was so high up in the sky.
+
+Suddenly, she heard a voice. It was a bird. The bird said, "Hello! I'm a bird. I'm so happy to see you. I'm so glad you're here!"
+
+The

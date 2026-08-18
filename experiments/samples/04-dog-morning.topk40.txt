@@ -1,0 +1,12 @@
+prompt: The little dog woke up early in the morning and
+mode: top-k  temperature: 0.8  top_k: 40  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+The little dog woke up early in the morning and saw the little dog running around the garden. It was so happy to see it!
+
+The little dog ran up the garden and started playing with the little dog. But then something even more exciting happened. A big black bird flew into the garden and grabbed the little dog's tail!
+
+The little dog was very scared. But the big black bird just kept chasing the little dog in the garden. The little dog was so scared that he ran away as fast as he could.
+
+When the little dog was home, the big black bird had gone. The little dog was so relieved

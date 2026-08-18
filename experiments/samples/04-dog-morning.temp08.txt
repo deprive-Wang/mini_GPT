@@ -1,0 +1,12 @@
+prompt: The little dog woke up early in the morning and
+mode: temperature  temperature: 0.8  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+The little dog woke up early in the morning and saw the little dog running around the garden. It was so happy to see it!
+
+The little dog ran up the garden and started playing with the little dog. But then something even more exciting happened. A big black bird flew into the garden and grabbed the little dog's tail!
+
+The little dog was very scared. But the big black bird at the little dog just laughed and said, "Don't be afraid. I won't hurt you!" The big black bird started to laugh and the little dog was so relieved.
+
+From that day on, the little dog and the

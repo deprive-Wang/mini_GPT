@@ -1,0 +1,10 @@
+prompt: One day, a little boy found a magic box
+mode: temperature  temperature: 0.8  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+One day, a little boy found a magic box in the park. He was very excited and wanted to see what was inside. He opened it and found a big, soft blanket. The boy wondered what was inside, so he put it on the blanket. It was so comfy and warm. 
+
+The boy loved his blanket and wanted to take it home. He picked up the blanket and it was so soft and cuddly. He put it back in the box and hugged it tight. He smiled and knew he would take good care of it.
+
+The boy kept the blanket close, and soon he knew it was home

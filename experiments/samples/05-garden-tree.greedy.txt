@@ -1,0 +1,12 @@
+prompt: There was a big tree in the garden
+mode: greedy  temperature: 1.0  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+There was a big tree in the garden. It was so tall that it reached the sky.
+
+One day, a little girl named Lily came to the garden. She saw the tree and wanted to climb it. She asked her mom, "Can I climb the tree?" Her mom said, "Yes, but be careful."
+
+Lily climbed the tree and saw a bird's nest. She said, "Hello bird, can I climb you?" The bird said, "Yes, but be careful." Lily climbed the tree and saw the nest was very pretty. She said, "Thank you, bird!"
+
+L

@@ -1,0 +1,10 @@
+prompt: Sara wanted to learn how to ride a bike
+mode: greedy  temperature: 1.0  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+Sara wanted to learn how to ride a bike. She asked her mom, "Can I ride a bike, please?" Her mom said, "Yes, you can. But you have to wear your helmet and stay safe."
+
+Sara put on her helmet and went outside. She saw a big hill with a lot of rocks. She wanted to ride her bike on the rocks. She said, "Mom, can I ride my bike on the rocks?" Her mom said, "Yes, you can. But be careful. The rocks are slippery."
+
+Sara rode her bike on the rocks. She felt happy and free.

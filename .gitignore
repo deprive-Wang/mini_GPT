@@ -1,7 +1,9 @@
-# 数据、权重、实验产物（体积大，不入库）
+# 数据、权重和大体积实验产物（样例文本例外）
 data/
 checkpoints/
-experiments/
+experiments/tb/
+experiments/*.log
+experiments/**/*.log
 
 # Python
 __pycache__/

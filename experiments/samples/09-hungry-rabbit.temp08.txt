@@ -1,0 +1,10 @@
+prompt: Billy the rabbit was very hungry. He decided to
+mode: temperature  temperature: 0.8  top_k: None  seed: 42
+max_new_tokens: 120  checkpoint: best.pt (step 24000)
+
+--- generated ---
+Billy the rabbit was very hungry. He decided to go to the nearby lake and have some food. He stopped at the edge of the lake and looked around. Suddenly, he saw a big crocodile. The crocodile was standing under the water.
+
+Billy was scared and he ran away. But he was too late. The crocodile caught him. Billy had to come back to the lake and sit at the lake. He could not get any food from the wolf's pond.
+
+Billy was very sad and he never got to eat the tasty food. He had to stay at the lake all night long. The end.<|endoftext|>Once
